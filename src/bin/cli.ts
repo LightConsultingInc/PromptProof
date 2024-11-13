@@ -5,7 +5,6 @@ import express from 'express';
 import { createTestServer } from '../server';
 import { spawn } from 'child_process';
 import path from 'path';
-import open from 'open';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
 
@@ -22,6 +21,18 @@ program
   .parse(process.argv);
 
 const options = program.opts();
+
+async function openBrowser(url: string) {
+  const platform = process.platform;
+  const cmd = platform === 'win32' ? 'start' :
+              platform === 'darwin' ? 'open' :
+              'xdg-open';
+  
+  spawn(cmd, [url], {
+    stdio: 'ignore',
+    detached: true
+  }).unref();
+}
 
 async function main() {
   // Create and start the server
@@ -54,7 +65,8 @@ async function main() {
 
   if (options.open) {
     // Open the dashboard in the default browser
-    await open(`http://localhost:${options.dashboardPort}`);
+    const url = `http://localhost:${options.dashboardPort}`;
+    await openBrowser(url);
   }
 
   console.log(chalk.green('\n✨ PromptProof is ready!'));
