@@ -4,6 +4,16 @@
   "description": "A testing framework for evaluating Large Language Models (LLMs) with a Jest-like syntax and a real-time dashboard",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./dashboard": {
+      "types": "./dist/dashboard.d.ts",
+      "default": "./dist/dashboard.js"
+    }
+  },
   "bin": {
     "promptproof": "./dist/bin/cli.js"
   },

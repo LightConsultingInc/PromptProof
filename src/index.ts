@@ -33,9 +33,6 @@ export {
   type ModelConfig
 } from './langchain/langchain.types';
 
-// Dashboard Component
-export { TestDashboard } from './dashboard/components/TestDashboard';
-
 // Utilities
 export {
   initializeEmbeddings,
