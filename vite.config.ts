@@ -8,6 +8,7 @@ export default defineConfig({
   publicDir: path.resolve(__dirname, 'public'),
   build: {
     outDir: path.resolve(__dirname, 'dist/dashboard'),
+    emptyOutDir: true
   },
   server: {
     port: 3000,

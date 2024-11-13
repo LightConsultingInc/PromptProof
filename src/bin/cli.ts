@@ -39,39 +39,30 @@ async function main() {
   const app = express();
   const server = createTestServer(app);
   
+  // Serve static dashboard files
+  const dashboardPath = path.resolve(__dirname, '../../dist/dashboard');
+  app.use(express.static(dashboardPath));
+  
+  // Serve index.html for all routes (SPA support)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(dashboardPath, 'index.html'));
+  });
+
   server.listen(options.port, () => {
     console.log(chalk.blue(`🚀 Test server running on port ${options.port}`));
   });
 
-  // Start the dashboard (Vite dev server)
-  const dashboard = spawn('npx', ['vite', '--port', options.dashboardPort], {
-    stdio: 'inherit',
-    shell: true,
-    env: {
-      ...process.env,
-      VITE_SERVER_PORT: options.port
-    }
-  });
-
-  // Handle process termination
-  process.on('SIGINT', () => {
-    dashboard.kill();
-    server.close();
-    process.exit();
-  });
-
-  // Wait for dashboard to be ready
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  // Wait for server to be ready
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
   if (options.open) {
     // Open the dashboard in the default browser
-    const url = `http://localhost:${options.dashboardPort}`;
+    const url = `http://localhost:${options.port}`;
     await openBrowser(url);
   }
 
   console.log(chalk.green('\n✨ PromptProof is ready!'));
-  console.log(chalk.cyan(`\n📊 Dashboard: http://localhost:${options.dashboardPort}`));
-  console.log(chalk.cyan(`🔌 Server: http://localhost:${options.port}`));
+  console.log(chalk.cyan(`\n📊 Dashboard: http://localhost:${options.port}`));
   console.log(chalk.yellow('\n📝 Looking for test files in current directory...'));
 
   // Check for API keys
