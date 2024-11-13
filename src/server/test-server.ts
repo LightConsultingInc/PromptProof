@@ -8,6 +8,7 @@ import glob from 'glob';
 import path from 'path';
 import { register } from 'ts-node';
 import { initializeEmbeddings } from '../utils/embeddings';
+import cors from 'cors';
 
 interface RunTestsRequest {
   provider: Providers;
@@ -25,6 +26,11 @@ register({
 });
 
 export function setupTestRoutes(app: Express, io: Server) {
+  // Ensure middleware is set up
+  app.use(cors());
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
   // Load all test files
   function loadTests() {
     try {
