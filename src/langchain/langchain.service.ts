@@ -63,6 +63,7 @@ export class LangChainService {
   ): Promise<string> {
     try {
       const langChainMessages: BaseMessage[] = messages.map((msg) => {
+        console.log('msg', msg);
         switch (msg.role) {
           case 'system':
             return new SystemMessage(msg.content);

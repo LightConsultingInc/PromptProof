@@ -1,5 +1,4 @@
 import { describe, llmTest, expect } from '../src/index';
-import { Providers, AnthropicModels } from '../src/index';
 
 describe('Math Tests', () => {
   llmTest('should solve basic arithmetic', async () => {
@@ -7,7 +6,7 @@ describe('Math Tests', () => {
     
     await expect(response)
       .toBeSimilarTo('The sum of 235 and 467 is 702.')
-      .semantic({ threshold: 0.8, useBLEU: true })
+      .semantic()
       .rules([
         {
           name: 'calculation',
@@ -15,14 +14,35 @@ describe('Math Tests', () => {
           message: 'Must include numerical calculation'
         }
       ])
-      .llm(
-        Providers.ANTHROPIC,
-        AnthropicModels.CLAUDE_3_OPUS,
-        {
-          systemPrompt: 'Evaluate mathematical accuracy and clarity'
-        }
-      )
-      .withThreshold(0.8)
       .evaluate();
+      
+    return response;
+  });
+
+  llmTest('should explain algebraic concepts', async () => {
+    const response = `To solve 2x + 5 = 13:
+1. Subtract 5 from both sides: 2x = 8
+2. Divide both sides by 2: x = 4
+3. Verify: 2(4) + 5 = 13 ✓
+Therefore, x = 4 is the solution.`;
+
+    await expect(response)
+      .toBeSimilarTo(`To solve 2x + 5 = 13...`)
+      .semantic()
+      .rules([
+        {
+          name: 'steps',
+          validate: text => text.includes('1.') && text.includes('2.'),
+          message: 'Must include numbered steps'
+        },
+        {
+          name: 'verification',
+          validate: text => text.toLowerCase().includes('verify') || text.includes('✓'),
+          message: 'Must include solution verification'
+        }
+      ])
+      .evaluate();
+
+    return response;
   });
 }); 

@@ -241,7 +241,7 @@ export const TestDashboard: React.FC = () => {
         {/* Controls Section */}
         <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
           <Grid container spacing={3} alignItems="center">
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" gutterBottom>
                 Provider
               </Typography>
@@ -258,7 +258,7 @@ export const TestDashboard: React.FC = () => {
                 ))}
               </Select>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" gutterBottom>
                 Model
               </Typography>
@@ -275,7 +275,7 @@ export const TestDashboard: React.FC = () => {
                 ))}
               </Select>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Typography variant="subtitle2" gutterBottom>
                 API Key
               </Typography>
@@ -287,7 +287,7 @@ export const TestDashboard: React.FC = () => {
                 sx={{ bgcolor: "background.paper" }}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12}>
               <Button
                 fullWidth
                 variant="contained"

@@ -38,4 +38,11 @@ export interface ModelConfig {
   temperature?: number;
   maxTokens?: number;
   apiKey?: string;
+  systemPrompt?: string;
+  parameters?: {
+    temperature?: number;
+    maxTokens?: number;
+    apiKey?: string;
+    [key: string]: any;
+  };
 }

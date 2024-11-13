@@ -1,5 +1,4 @@
 import { describe, llmTest, expect } from '../src/index';
-import { Providers, AnthropicModels } from '../src/index';
 
 describe('Customer Service Tests', () => {
   llmTest('should handle refund request politely', async () => {
@@ -25,13 +24,8 @@ describe('Customer Service Tests', () => {
           message: 'Response must have multiple sentences for clarity'
         }
       ])
-      .llm(
-        Providers.ANTHROPIC,
-        AnthropicModels.CLAUDE_3_OPUS,
-        {
-          systemPrompt: 'Evaluate customer service response quality'
-        }
-      )
       .evaluate();
+
+    return response;  // Important: Return the response string
   });
 }); 

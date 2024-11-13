@@ -7,6 +7,10 @@ import {
   EvaluationMetric
 } from '../types';
 
+interface TestFunction {
+  (): Promise<string>;
+}
+
 export class LLMEvaluator {
   private config: EvaluationConfig;
   private modelService: LangChainService;
@@ -33,58 +37,63 @@ export class LLMEvaluator {
     });
   }
 
-  async evaluateTestCase(testCase: TestCase): Promise<EvaluationResult> {
-    const { input, expectedOutput } = testCase;
-    
-    // Get the actual output from the model being evaluated
-    const actualOutput = await this.modelService.chat([
-      { role: 'user', content: input }
-    ]);
-    
-    // Run all metrics
-    const metricResults = await Promise.all(
-      this.config.metrics.map(async metric => {
-        const score = await this.evaluateMetric(metric, actualOutput, expectedOutput);
-        const explanation = await this.generateExplanation(
-          metric.name,
-          score,
+  async evaluateTestCase(test: { description: string; fn: TestFunction; metadata?: any }): Promise<EvaluationResult> {
+    try {
+      // Execute the test function and get the response string
+      const response = await test.fn();
+      
+      // Get the actual output from the model being evaluated
+      const actualOutput = await this.modelService.chat([
+        { role: 'user', content: response }
+      ]);
+      
+      // Run all metrics
+      const metricResults = await Promise.all(
+        this.config.metrics.map(async metric => {
+          const score = await this.evaluateMetric(metric, actualOutput, response);
+          const explanation = await this.generateExplanation(
+            metric.name,
+            score,
+            actualOutput,
+            response
+          );
+          return { metric: metric.name, score, explanation };
+        })
+      );
+
+      // Run rule validations if configured
+      const ruleViolations = this.config.rules 
+        ? await this.validateRules(actualOutput)
+        : [];
+
+      // Get LLM evaluation
+      const evaluation = await this.evaluateResponse(
+        test.description,
+        response,
+        actualOutput
+      );
+
+      // Get overall summary
+      const summary = await this.summarizeEvaluation(metricResults);
+
+      return {
+        score: evaluation.score,
+        feedback: evaluation.feedback,
+        issues: ruleViolations,
+        metadata: {
+          metricResults,
           actualOutput,
-          expectedOutput
-        );
-        return { metric: metric.name, score, explanation };
-      })
-    );
-
-    // Run rule validations if configured
-    const ruleViolations = this.config.rules 
-      ? await this.validateRules(actualOutput)
-      : [];
-
-    // Get LLM evaluation
-    const evaluation = await this.evaluateResponse(
-      input,
-      expectedOutput,
-      actualOutput
-    );
-
-    // Get overall summary
-    const summary = await this.summarizeEvaluation(metricResults);
-
-    console.log('evaluation', evaluation);
-
-    return {
-      score: evaluation.score,
-      feedback: evaluation.feedback,
-      issues: ruleViolations,
-      metadata: {
-        metricResults,
-        actualOutput,
-        reasoning: evaluation.reasoning,
-        summary,
-        timestamp: new Date().toISOString(),
-        modelConfig: this.config.model
-      }
-    };
+          reasoning: evaluation.reasoning,
+          summary,
+          timestamp: new Date().toISOString(),
+          modelConfig: this.config.model,
+          ...test.metadata
+        }
+      };
+    } catch (error) {
+      console.error('Error evaluating test case:', error);
+      throw error;
+    }
   }
 
   private async evaluateMetric(

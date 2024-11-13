@@ -9,6 +9,7 @@ import path from 'path';
 import { register } from 'ts-node';
 import { initializeEmbeddings } from '../utils/embeddings';
 import cors from 'cors';
+import { setGlobalSettings } from '../test-utils/setup';
 
 interface RunTestsRequest {
   provider: Providers;
@@ -88,6 +89,8 @@ export function setupTestRoutes(app: Express, io: Server) {
         batch.map(async test => {
           try {
             console.log(`Running test: ${test.description}`);
+            // Execute the test function to get the response
+            await test.fn();
             const result = await evaluator.evaluateTestCase(test);
             console.log(`Test completed: ${test.description}`);
             return {
@@ -103,7 +106,7 @@ export function setupTestRoutes(app: Express, io: Server) {
               score: 0,
               feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
               actualOutput: '',
-              expectedOutput: test.expectedOutput,
+              expectedOutput: '',
               metadata: test.metadata
             };
           }
@@ -132,42 +135,40 @@ export function setupTestRoutes(app: Express, io: Server) {
 
     try {
       await initializeEmbeddings(apiKey);
-    } catch (error) {
-      console.error('Failed to initialize embeddings:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to initialize embeddings'
-      });
-    }
-    
-    const config = {
-      model: {
-        name: model,
-        provider,
-        parameters: {
-          temperature: 0.7,
-          apiKey: apiKey
-        }
-      },
-      evaluator: {
+
+      const config = {
         model: {
           name: model,
           provider,
           parameters: {
-            temperature: 0.2,
-            apiKey: apiKey
+            temperature: 0.7,
+            apiKey
           }
-        }
-      },
-      metrics: [
-        semanticSimilarityMetric,
-        bleuScoreMetric,
-        rougeScoreMetric
-      ],
-      similarityThreshold: 0.8
-    };
+        },
+        evaluator: {
+          model: {
+            name: model,
+            provider,
+            parameters: {
+              temperature: 0.2,
+              apiKey
+            }
+          }
+        },
+        metrics: [
+          semanticSimilarityMetric,
+          bleuScoreMetric,
+          rougeScoreMetric
+        ],
+        similarityThreshold: 0.8
+      };
 
-    try {
+      console.log('Running tests with config:', {
+        ...config,
+        model: { ...config.model, parameters: { ...config.model.parameters, apiKey: '***' } },
+        evaluator: { ...config.evaluator, model: { ...config.evaluator.model, parameters: { ...config.evaluator.model.parameters, apiKey: '***' } } }
+      });
+
       const evaluator = new LLMEvaluator(config);
       const tests = loadTests();
       console.log(`Loaded ${tests.length} tests`);
