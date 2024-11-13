@@ -28,14 +28,21 @@ export function setupTestRoutes(app: Express, io: Server) {
   // Load all test files
   function loadTests() {
     try {
-      // Get the absolute path to the tests directory
-      const testsDir = path.resolve(process.cwd(), 'src/tests');
-      console.log('Looking for tests in:', testsDir);
+      // Get the project root directory
+      const projectRoot = process.cwd();
+      console.log('Looking for tests in project root:', projectRoot);
       
-      // Find all test files
-      const testFiles = glob.sync('**/*.test.ts', {
-        cwd: testsDir,
-        absolute: true
+      // Find all test files in the entire project
+      const testFiles = glob.sync('**/*.test.{ts,js}', {
+        cwd: projectRoot,
+        absolute: true,
+        ignore: [
+          '**/node_modules/**',
+          '**/dist/**',
+          '**/build/**',
+          '**/coverage/**',
+          '**/.git/**'
+        ]
       });
       
       console.log('Found test files:', testFiles);
@@ -49,7 +56,7 @@ export function setupTestRoutes(app: Express, io: Server) {
           try {
             // Clear require cache to ensure fresh load
             delete require.cache[require.resolve(file)];
-            // Use require with the original .ts file
+            // Use require with the original file
             require(file);
           } catch (error) {
             console.error(`Error loading test file ${file}:`, error);
@@ -65,48 +72,6 @@ export function setupTestRoutes(app: Express, io: Server) {
       throw error;
     }
   }
-
-  // Move test files from examples to src/tests if they don't exist
-  function ensureTestFiles() {
-    const testsDir = path.resolve(process.cwd(), 'src/tests');
-    
-    // Create tests directory if it doesn't exist
-    if (!require('fs').existsSync(testsDir)) {
-      console.log('Creating tests directory...');
-      require('fs').mkdirSync(testsDir, { recursive: true });
-    }
-
-    const existingFiles = glob.sync('**/*.test.ts', { cwd: testsDir });
-    if (existingFiles.length === 0) {
-      console.log('No tests found in src/tests, copying example tests...');
-      const testFiles = [
-        'math.test.ts',
-        'science.test.ts',
-        'writing.test.ts',
-        'coding.test.ts'
-      ];
-
-      testFiles.forEach(file => {
-        const targetPath = path.resolve(testsDir, file);
-        const sourcePath = path.resolve(__dirname, '../../src/tests', file);
-        
-        try {
-          if (!require('fs').existsSync(targetPath)) {
-            console.log(`Creating ${file}...`);
-            // Copy the file content
-            const content = require('fs').readFileSync(sourcePath, 'utf8');
-            require('fs').writeFileSync(targetPath, content);
-            console.log(`Created ${file} successfully`);
-          }
-        } catch (error) {
-          console.error(`Error creating test file ${file}:`, error);
-        }
-      });
-    }
-  }
-
-  // Call ensureTestFiles before setting up routes
-  ensureTestFiles();
 
   // Add a helper function for parallel execution
   async function runTestsInParallel(tests: any[], evaluator: LLMEvaluator, batchSize: number = 3) {
