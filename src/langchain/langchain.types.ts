@@ -13,6 +13,8 @@ export type ProviderModel = {
 };
 
 export enum AnthropicModels {
+  CLAUDE_3_5_SONNET = 'claude-3-5-sonnet-20241022',
+  CLAUDE_3_5_HAIKU = 'claude-3-5-haiku-20241022',
   CLAUDE_3_OPUS = 'claude-3-opus-20240620',
   CLAUDE_3_SONNET = 'claude-3-sonnet-20240620', 
   CLAUDE_3_HAIKU = 'claude-3-haiku-20240620',
@@ -20,6 +22,7 @@ export enum AnthropicModels {
 }
 
 export enum OpenAIModels {
+  GPT_4_O = 'gpt-4o',
   GPT_4_TURBO = 'gpt-4-turbo-preview',
   GPT_4 = 'gpt-4',
   GPT_3_5_TURBO = 'gpt-3.5-turbo'
