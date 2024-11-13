@@ -12,9 +12,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && vite build",
     "prepare": "npm run build",
-    "start:dashboard": "vite",
+    "start:dashboard": "vite --config vite.config.ts",
     "start:server": "ts-node src/server/server.ts",
     "dev": "concurrently \"npm run start:dashboard\" \"npm run start:server\"",
     "lint": "eslint src/**/*.ts",
