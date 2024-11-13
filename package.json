@@ -1,5 +1,5 @@
 {
-  "name": "llm-test-runner",
+  "name": "promptproof",
   "version": "0.1.0",
   "description": "A testing framework for evaluating Large Language Models (LLMs) with a Jest-like syntax and a real-time dashboard",
   "main": "dist/index.js",
