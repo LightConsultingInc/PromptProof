@@ -1,7 +1,7 @@
 // Core exports
-export { LLMEvaluator } from './evaluator/core';
+export { LLMEvaluator as CoreEvaluator } from './evaluator/core';
 export { TestRunner } from './runner/testRunner';
-export { describe, llmTest } from './test-utils/setup';
+export { describe, llmTest, expect } from './test-utils/setup';
 
 // Types
 export type {
@@ -12,6 +12,13 @@ export type {
   EvaluatorModel,
   EvaluationConfig
 } from './types';
+
+// Evaluators
+export { Evaluator } from './evaluators/base';
+export { SemanticEvaluator } from './evaluators/semantic';
+export { LLMEvaluator } from './evaluators/llm';
+export { RuleEvaluator } from './evaluators/rules';
+export { CompositeEvaluator } from './evaluators/composite';
 
 // Metrics
 export {
@@ -30,7 +37,8 @@ export {
   AnthropicModels,
   OpenAIModels,
   type Models,
-  type ModelConfig
+  type ModelConfig,
+  type ProviderModel
 } from './langchain/langchain.types';
 
 // Utilities
@@ -38,4 +46,4 @@ export {
   initializeEmbeddings,
   getEmbeddings,
   cosineSimilarity
-} from './utils/embeddings'; 
+} from './utils/embeddings';

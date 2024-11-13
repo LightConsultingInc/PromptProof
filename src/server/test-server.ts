@@ -39,7 +39,7 @@ export function setupTestRoutes(app: Express, io: Server) {
       console.log('Looking for tests in project root:', projectRoot);
       
       // Find all test files in the entire project
-      const testFiles = glob.sync('**/*.promptproof.{ts,js}', {
+      const testFiles = glob.sync('**/*.promptproof.test.{ts,js}', {
         cwd: projectRoot,
         absolute: true,
         ignore: [

@@ -1,4 +1,5 @@
 import { Providers, Models } from '../langchain/langchain.types';
+import { Evaluator } from '../evaluators/base';
 
 export interface EvaluationResult {
   score: number;
@@ -21,6 +22,7 @@ export interface EvaluationResult {
 export interface TestCase {
   input: string;
   expectedOutput: string;
+  evaluator?: Evaluator;
   metadata?: Record<string, unknown>;
 }
 
