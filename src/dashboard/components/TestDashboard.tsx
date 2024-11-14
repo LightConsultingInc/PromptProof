@@ -3,7 +3,6 @@ import { io } from "socket.io-client";
 import {
   Box,
   Container,
-  Typography,
   Paper,
   Select,
   MenuItem,
@@ -11,39 +10,28 @@ import {
   Grid,
   TextField,
   CircularProgress,
-  Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  LinearProgress,
-  Card,
-  CardContent,
-  IconButton,
-  Tooltip,
+  Alert,
+  Typography,
   Divider,
 } from "@mui/material";
-import {
-  ExpandMore as ExpandMoreIcon,
-  CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
-  Speed as SpeedIcon,
-  Category as CategoryIcon,
-  Assignment as AssignmentIcon,
-} from "@mui/icons-material";
 import {
   Providers,
   AnthropicModels,
   OpenAIModels,
 } from "../../langchain/langchain.types";
+import { TestSummary } from "./TestSummary";
+import { TestFilters } from "./TestFilters";
+import { TestCard } from "./TestCard";
 
 interface TestResult {
   description: string;
-  status: "completed" | "failed";
+  status: "pending" | "running" | "completed" | "failed";
   score: number;
   feedback: string;
   actualOutput: string;
   expectedOutput: string;
+  startTime?: number;
+  endTime?: number;
   metadata?: {
     metricResults?: Array<{
       metric: string;
@@ -57,26 +45,79 @@ interface TestResult {
     reasoning?: string;
     summary?: string;
     timestamp?: string;
-    [key: string]: any;
   };
 }
 
 export const TestDashboard: React.FC = () => {
+  // Core state
   const [provider, setProvider] = useState<Providers>(Providers.ANTHROPIC);
   const [model, setModel] = useState<string>(AnthropicModels.CLAUDE_3_SONNET);
-  const [results, setResults] = useState<TestResult[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+
+  // Test results and metadata
+  const [results, setResults] = useState<TestResult[]>([]);
   const [availableTests, setAvailableTests] = useState<
     Array<{ description: string; metadata: any }>
   >([]);
+  const [startTime, setStartTime] = useState<number | undefined>();
+  const [endTime, setEndTime] = useState<number | undefined>();
 
+  // Filter state
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedDifficulty, setSelectedDifficulty] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Derived state
   const models =
     provider === Providers.ANTHROPIC ? AnthropicModels : OpenAIModels;
+  const categories = [
+    ...new Set(
+      availableTests.map((test) => test.metadata?.category).filter(Boolean)
+    ),
+  ];
+  const difficulties = [
+    ...new Set(
+      availableTests.map((test) => test.metadata?.difficulty).filter(Boolean)
+    ),
+  ];
+
+  const completedTests = results.filter(
+    (r) => r.status === "completed" || r.status === "failed"
+  );
+  const passedTests = results.filter(
+    (r) => r.status === "completed" && r.score >= 0.8
+  );
+  const failedTests = results.filter(
+    (r) => r.status === "failed" || (r.status === "completed" && r.score < 0.8)
+  );
+  const averageScore =
+    completedTests.length > 0
+      ? completedTests.reduce((acc, curr) => acc + curr.score, 0) /
+        completedTests.length
+      : 0;
+
+  // Filter results
+  const filteredResults = results.filter((result) => {
+    const matchesCategory =
+      !selectedCategory || result.metadata?.category === selectedCategory;
+    const matchesDifficulty =
+      !selectedDifficulty || result.metadata?.difficulty === selectedDifficulty;
+    const matchesSearch =
+      !searchQuery ||
+      result.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesDifficulty && matchesSearch;
+  });
+
+  // Add new state for tracking test progress
+  const [testProgress, setTestProgress] = useState<Map<string, TestResult>>(
+    new Map()
+  );
+  const [runningTests, setRunningTests] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Load available tests when component mounts
+    // Load available tests
     fetch("/api/tests")
       .then((res) => res.json())
       .then((data) => {
@@ -89,20 +130,48 @@ export const TestDashboard: React.FC = () => {
         setError("Failed to load available tests");
       });
 
+    // Set up socket connection
     const socket = io("http://localhost:3001");
 
     socket.on("testResult", (result: TestResult) => {
-      console.log("Received test result:", result);
-      setResults((prev) => [...prev, result]);
+      setTestProgress((prev) => {
+        const newProgress = new Map(prev);
+        newProgress.set(result.description, result);
+        return newProgress;
+      });
+
+      // Update running tests set
+      setRunningTests((prev) => {
+        const newRunning = new Set(prev);
+        if (result.status === "running") {
+          newRunning.add(result.description);
+        } else {
+          newRunning.delete(result.description);
+        }
+        return newRunning;
+      });
+
+      // Update results array when a test completes
+      if (result.status === "completed" || result.status === "failed") {
+        setResults((prev) => {
+          const existing = prev.findIndex(
+            (r) => r.description === result.description
+          );
+          if (existing >= 0) {
+            const newResults = [...prev];
+            newResults[existing] = result;
+            return newResults;
+          }
+          return [...prev, result];
+        });
+      }
     });
 
     socket.on("connect", () => {
-      console.log("Connected to test server");
       setError(null);
     });
 
     socket.on("connect_error", (err) => {
-      console.error("Socket connection error:", err);
       setError("Failed to connect to test server");
     });
 
@@ -115,6 +184,8 @@ export const TestDashboard: React.FC = () => {
     setIsRunning(true);
     setResults([]);
     setError(null);
+    setStartTime(Date.now());
+    setEndTime(undefined);
 
     try {
       const response = await fetch("/api/run-tests", {
@@ -139,21 +210,15 @@ export const TestDashboard: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Error running tests:", error);
-      setError(error?.message as string);
+      setError(error?.message || "An error occurred");
     } finally {
       setIsRunning(false);
+      setEndTime(Date.now());
     }
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        bgcolor: "grey.100",
-        pt: 3,
-        pb: 6,
-      }}
-    >
+    <Box sx={{ minHeight: "100vh", bgcolor: "grey.100", pt: 3, pb: 6 }}>
       <Container maxWidth="xl">
         {/* Header */}
         <Paper
@@ -167,7 +232,7 @@ export const TestDashboard: React.FC = () => {
           }}
         >
           <Typography variant="h3" gutterBottom fontWeight="bold">
-            LLM Test Dashboard
+            PromptProof Dashboard
           </Typography>
           <Typography variant="subtitle1">
             Real-time evaluation and testing of Language Models
@@ -176,69 +241,37 @@ export const TestDashboard: React.FC = () => {
 
         {/* Error Display */}
         {error && (
-          <Paper
-            sx={{
-              p: 2,
-              mb: 3,
-              bgcolor: "error.light",
-              borderLeft: 6,
-              borderColor: "error.main",
-              borderRadius: 2,
-            }}
-          >
-            <Box display="flex" alignItems="center" gap={1}>
-              <ErrorIcon color="error" />
-              <Typography color="error.dark">{error}</Typography>
-            </Box>
-          </Paper>
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
         )}
 
-        {/* Available Tests Section */}
-        <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
-          <Box display="flex" alignItems="center" gap={2} mb={2}>
-            <AssignmentIcon color="primary" />
-            <Typography variant="h6">
-              Available Tests ({availableTests.length})
-            </Typography>
-          </Box>
-          <Grid container spacing={2}>
-            {availableTests.map((test, index) => (
-              <Grid item xs={12} md={6} lg={4} key={index}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      {test.description}
-                    </Typography>
-                    {test.metadata?.category && (
-                      <Chip
-                        icon={<CategoryIcon />}
-                        label={test.metadata.category}
-                        size="small"
-                        sx={{ mr: 1 }}
-                      />
-                    )}
-                    {test.metadata?.difficulty && (
-                      <Chip
-                        icon={<SpeedIcon />}
-                        label={test.metadata.difficulty}
-                        size="small"
-                        color={
-                          test.metadata.difficulty === "easy"
-                            ? "success"
-                            : test.metadata.difficulty === "medium"
-                              ? "warning"
-                              : "error"
-                        }
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
+        {/* Test Summary */}
+        <TestSummary
+          total={availableTests.length}
+          completed={completedTests.length}
+          passed={passedTests.length}
+          failed={failedTests.length}
+          isRunning={isRunning}
+          startTime={startTime}
+          endTime={endTime}
+          categories={Object.fromEntries(
+            categories.map((cat) => [
+              cat,
+              availableTests.filter((t) => t.metadata?.category === cat).length,
+            ])
+          )}
+          difficulties={Object.fromEntries(
+            difficulties.map((diff) => [
+              diff,
+              availableTests.filter((t) => t.metadata?.difficulty === diff)
+                .length,
+            ])
+          )}
+          averageScore={averageScore}
+        />
 
-        {/* Controls Section */}
+        {/* Controls */}
         <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
           <Grid container spacing={3} alignItems="center">
             <Grid item xs={12} md={4}>
@@ -314,130 +347,55 @@ export const TestDashboard: React.FC = () => {
           </Grid>
         </Paper>
 
-        {/* Results Section */}
-        {results.map((result, index) => (
-          <Accordion
-            key={index}
-            defaultExpanded={index === results.length - 1}
-            sx={{
-              mb: 2,
-              borderRadius: "8px !important",
-              "&:before": { display: "none" },
-            }}
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box display="flex" alignItems="center" gap={2} width="100%">
-                {result.status === "completed" ? (
-                  <CheckCircleIcon color="success" />
-                ) : (
-                  <ErrorIcon color="error" />
-                )}
-                <Typography variant="h6" sx={{ flex: 1 }}>
-                  {result.description}
-                </Typography>
-                <Typography
-                  variant="h6"
-                  color={result.score >= 0.8 ? "success.main" : "error.main"}
-                  sx={{ minWidth: 100, textAlign: "right" }}
-                >
-                  {(result.score * 100).toFixed(1)}%
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={3}>
-                {/* Metrics Section */}
-                {result.metadata?.metricResults && (
-                  <Grid item xs={12}>
-                    <Typography variant="h6" gutterBottom>
-                      Metrics
-                    </Typography>
-                    <Grid container spacing={2}>
-                      {result.metadata.metricResults.map((metric, idx) => (
-                        <Grid item xs={12} md={4} key={idx}>
-                          <Paper sx={{ p: 2 }}>
-                            <Typography variant="subtitle2" gutterBottom>
-                              {metric.metric}
-                            </Typography>
-                            <LinearProgress
-                              variant="determinate"
-                              value={metric.score * 100}
-                              sx={{ mb: 1, height: 8, borderRadius: 4 }}
-                            />
-                            <Typography variant="body2" color="text.secondary">
-                              {metric.explanation}
-                            </Typography>
-                          </Paper>
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Grid>
-                )}
+        {/* Filters */}
+        <TestFilters
+          categories={categories}
+          difficulties={difficulties}
+          selectedCategory={selectedCategory}
+          selectedDifficulty={selectedDifficulty}
+          searchQuery={searchQuery}
+          onCategoryChange={setSelectedCategory}
+          onDifficultyChange={setSelectedDifficulty}
+          onSearchChange={setSearchQuery}
+        />
 
-                {/* Response Comparison */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    Response Comparison
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "grey.50", height: "100%" }}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          Expected Output
-                        </Typography>
-                        <Typography variant="body2">
-                          {result.expectedOutput}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Paper sx={{ p: 2, bgcolor: "grey.50", height: "100%" }}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          Actual Output
-                        </Typography>
-                        <Typography variant="body2">
-                          {result.actualOutput}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                  </Grid>
-                </Grid>
+        {/* Active Tests Section */}
+        {Array.from(testProgress.values())
+          .filter(
+            (result) =>
+              result.status === "pending" || result.status === "running"
+          )
+          .map((result) => (
+            <TestCard
+              key={result.description}
+              result={result}
+              isRunning={runningTests.has(result.description)}
+            />
+          ))}
 
-                {/* Analysis Section */}
-                {(result.metadata?.reasoning || result.metadata?.summary) && (
-                  <Grid item xs={12}>
-                    <Typography variant="h6" gutterBottom>
-                      Analysis
-                    </Typography>
-                    <Paper sx={{ p: 2 }}>
-                      {result.metadata.reasoning && (
-                        <>
-                          <Typography variant="subtitle2" gutterBottom>
-                            Reasoning
-                          </Typography>
-                          <Typography variant="body2" paragraph>
-                            {result.metadata.reasoning}
-                          </Typography>
-                        </>
-                      )}
-                      {result.metadata.summary && (
-                        <>
-                          <Divider sx={{ my: 2 }} />
-                          <Typography variant="subtitle2" gutterBottom>
-                            Summary
-                          </Typography>
-                          <Typography variant="body2">
-                            {result.metadata.summary}
-                          </Typography>
-                        </>
-                      )}
-                    </Paper>
-                  </Grid>
-                )}
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-        ))}
+        {/* Divider between active and completed tests */}
+        {testProgress.size > 0 && filteredResults.length > 0 && (
+          <Box sx={{ my: 4 }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              Completed Tests
+            </Typography>
+            <Divider />
+          </Box>
+        )}
+
+        {/* Completed Tests Section */}
+        {filteredResults
+          .filter(
+            (result) =>
+              result.status === "completed" || result.status === "failed"
+          )
+          .map((result) => (
+            <TestCard
+              key={result.description}
+              result={result}
+              isRunning={runningTests.has(result.description)}
+            />
+          ))}
       </Container>
     </Box>
   );

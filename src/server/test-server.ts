@@ -81,44 +81,79 @@ export function setupTestRoutes(app: Express, io: Server) {
   }
 
   // Add a helper function for parallel execution
-  async function runTestsInParallel(tests: any[], evaluator: LLMEvaluator, batchSize: number = 3) {
+  async function runTestsInParallel(tests: any[], evaluator: LLMEvaluator, batchSize: number = 3, io: Server) {
     const results = [];
+    const startTime = Date.now();
+
+    // Initialize all tests as pending
+    tests.forEach(test => {
+      io.emit('testResult', {
+        description: test.description,
+        status: 'pending',
+        score: 0,
+        feedback: 'Waiting to start...',
+        startTime,
+        metadata: test.metadata
+      });
+    });
+
     for (let i = 0; i < tests.length; i += batchSize) {
       const batch = tests.slice(i, i + batchSize);
-      const batchResults = await Promise.all(
-        batch.map(async test => {
-          try {
-            console.log(`Running test: ${test.description}`);
-            // Execute the test function to get the response
-            await test.fn();
-            const result = await evaluator.evaluateTestCase(test);
-            console.log(`Test completed: ${test.description}`);
-            return {
-              description: test.description,
-              status: 'completed',
-              ...result
-            };
-          } catch (error) {
-            console.error(`Error running test: ${test.description}`, error);
-            return {
-              description: test.description,
-              status: 'failed',
-              score: 0,
-              feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              actualOutput: '',
-              expectedOutput: '',
-              metadata: test.metadata
-            };
-          }
-        })
-      );
-      results.push(...batchResults);
-      
-      // Emit each result in the batch
-      batchResults.forEach(result => {
-        io.emit('testResult', result);
+      const batchPromises = batch.map(async test => {
+        try {
+          // Update status to running
+          io.emit('testResult', {
+            description: test.description,
+            status: 'running',
+            score: 0,
+            feedback: 'Test in progress...',
+            startTime: Date.now(),
+            metadata: test.metadata
+          });
+
+          console.log(`Running test: ${test.description}`);
+          await test.fn();
+          const result = await evaluator.evaluateTestCase(test);
+          const endTime = Date.now();
+
+          const finalResult = {
+            description: test.description,
+            status: 'completed',
+            startTime,
+            endTime,
+            ...result
+          };
+
+          // Emit individual test completion
+          io.emit('testResult', finalResult);
+          console.log(`Test completed: ${test.description}`);
+          return finalResult;
+
+        } catch (error) {
+          console.error(`Error running test: ${test.description}`, error);
+          const failedResult = {
+            description: test.description,
+            status: 'failed',
+            score: 0,
+            feedback: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            actualOutput: '',
+            expectedOutput: '',
+            startTime,
+            endTime: Date.now(),
+            metadata: test.metadata
+          };
+          
+          // Emit test failure
+          io.emit('testResult', failedResult);
+          return failedResult;
+        }
       });
+
+      // Wait for batch to complete but emit results individually
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
     }
+
     return results;
   }
 
@@ -174,7 +209,7 @@ export function setupTestRoutes(app: Express, io: Server) {
       console.log(`Loaded ${tests.length} tests`);
       
       // Run tests in parallel with batch size of 3
-      const results = await runTestsInParallel(tests, evaluator, 3);
+      const results = await runTestsInParallel(tests, evaluator, 3, io);
       
       res.json({ 
         success: true, 
